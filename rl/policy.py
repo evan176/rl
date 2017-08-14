@@ -158,7 +158,9 @@ class Critic(RLInterface):
 
     def _build_loss_op(self):
         with tf.variable_scope("Critic"):
-            self._loss = tf.square(self._tderror, name="loss")
+            self._loss = tf.losses.huber_loss(
+                self._target_holder, self._output_value
+            )
 
     def _build_train_op(self):
         with tf.variable_scope("Critic"):
