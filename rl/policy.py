@@ -290,15 +290,15 @@ class ActorCritic(RLInterface):
     def critic(self):
         return self._critic
 
-    def train(self, x, action, reward, next_x, learning_rate=None):
+    def train(self, x, action, reward, next_x, done, learning_rate=None):
         if not learning_rate:
             learning_rate = self._learning_rate
         tderror = self._critic.get_tderror(x, reward, next_x)
-        self._critic.train(x, reward, next_x, learning_rate)
+        self._critic.train(x, reward, next_x, done, learning_rate)
         self._actor.train(x, action, tderror, learning_rate)
 
     def get_value(self, x):
         return self._actor.get_value(x)
 
     def get_loss(self, x, reward, next_x):
-        return self._critic.get_loss(x, reward, next_x)
+        return self._critic.get_loss(x, reward, next_x, done)
