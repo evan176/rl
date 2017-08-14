@@ -403,8 +403,13 @@ class DuelingDQN(DQN):
                 )
             # Q funciton
             with tf.name_scope("eval_q") as scope:
+                adv_mean = tf.subtract(
+                    self._eval_adv,
+                    tf.reduce_mean(self._eval_adv, axis=1, keep_dims=True),
+                    name="eval_adv_mean"
+                )
                 self._eval_q = tf.add(
-                    self._eval_val, self._eval_adv, name="eval_q"
+                    self._eval_val, adv_mean, name="eval_q"
                 )
 
         with tf.variable_scope("target_network"):
@@ -439,8 +444,13 @@ class DuelingDQN(DQN):
                 )
             # Q funciton
             with tf.name_scope("target_q") as scope:
+                adv_mean = tf.subtract(
+                    self._target_adv,
+                    tf.reduce_mean(self._target_adv, axis=1, keep_dims=True),
+                    name="target_adv_mean"
+                )
                 self._target_q = tf.add(
-                    self._target_val, self._target_adv, name="target_q"
+                    self._target_val, adv_mean, name="target_q"
                 )
 
 class DuelingDDQN(DuelingDQN, DoubleDQN):
