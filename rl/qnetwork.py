@@ -162,9 +162,12 @@ class DQN(RLInterface):
         # Create available vector
         chosen_vector = self._create_action_vector(len(x), chosen_action)
         # Compute target value
-        target_value = self._calculate_target_value(
-            reward, next_x, done, next_available
-        )
+        if self._train_step < self._replace_iter:
+            target_value = reward
+        else:
+            target_value = self._calculate_target_value(
+                reward, next_x, done, next_available
+            )
 
         if self._train_step % 100 == 0 and self._train_writer:
             run_options = tf.RunOptions(trace_level=tf.RunOptions.FULL_TRACE)
@@ -320,7 +323,9 @@ class DQN(RLInterface):
             if done[i][0]:
                 target_value.append([reward[i][0]])
             else:
-                target_value.append([reward[i][0] + self._discount * max_target])
+                target_value.append(
+                    [reward[i][0] + self._discount * max_target]
+                )
         return target_value
 
 
