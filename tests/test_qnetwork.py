@@ -59,20 +59,21 @@ class DQNMLPTest(tf.test.TestCase):
                              for i in range(batch_size)]
             reward = numpy.random.rand(batch_size, 1)
             next_x = numpy.random.rand(batch_size, test_dims[0])
+            done = numpy.zeros([batch_size, 1])
             next_available = []
             for i in range(batch_size):
                 num = random.randint(0, test_dims[-1] - 1)
                 next_available.append(random.sample(range(test_dims[-1]), num))
 
             returns = agent.train(
-                x, chosen_action, reward, next_x, next_available
+                x, chosen_action, reward, next_x, done, next_available
             )
             # Check replace count
             self.assertEqual(agent._train_step, 1)
 
             for i in range(2):
                 returns = agent.train(
-                    x, chosen_action, reward, next_x, next_available
+                    x, chosen_action, reward, next_x, done, next_available
                 )
             self.assertEqual(agent._train_step, 3)
 
@@ -88,13 +89,14 @@ class DQNMLPTest(tf.test.TestCase):
                              for i in range(batch_size)]
             reward = numpy.random.rand(batch_size, 1)
             next_x = numpy.random.rand(batch_size, test_dims[0])
+            done = numpy.zeros([batch_size, 1])
             next_available = []
             for i in range(batch_size):
                 num = random.randint(0, test_dims[-1] - 1)
                 next_available.append(random.sample(range(test_dims[-1]), num))
             # Check loss's shape
             returns = agent.get_loss(
-                x, chosen_action, reward, next_x, next_available
+                x, chosen_action, reward, next_x, done, next_available
             )
             self.assertEqual(returns.shape, (batch_size, 1))
 
@@ -163,19 +165,20 @@ class DQNCNN2DTest(tf.test.TestCase):
                              for i in range(batch_size)]
             reward = numpy.random.rand(batch_size, 1)
             next_x = numpy.random.rand(batch_size, height, width, 3)
+            done = numpy.zeros([batch_size, 1])
             next_available = []
             for i in range(batch_size):
                 num = random.randint(0, action_size - 1)
                 next_available.append(random.sample(range(action_size), num))
 
             returns = agent.train(
-                x, chosen_action, reward, next_x, next_available
+                x, chosen_action, reward, next_x, done, next_available
             )
             # Check replace count
             self.assertEqual(agent._train_step, 1)
             for i in range(2):
                 returns = agent.train(
-                    x, chosen_action, reward, next_x, next_available
+                    x, chosen_action, reward, next_x, done, next_available
                 )
             self.assertEqual(agent._train_step, 3)
 
@@ -201,6 +204,7 @@ class DQNCNN2DTest(tf.test.TestCase):
             next_x = numpy.random.rand(
                 batch_size, height, width, channels[0]
             )
+            done = numpy.zeros([batch_size, 1])
             next_available = []
             for i in range(batch_size):
                 num = random.randint(0, action_size - 1)
@@ -208,7 +212,7 @@ class DQNCNN2DTest(tf.test.TestCase):
 
             # Check loss's shape
             returns = agent.get_loss(
-                x, chosen_action, reward, next_x, next_available
+                x, chosen_action, reward, next_x, done, next_available
             )
             self.assertEqual(returns.shape, (batch_size, 1))
 
@@ -292,14 +296,16 @@ class DQNCNN3DTest(tf.test.TestCase):
                 num = random.randint(0, action_size - 1)
                 next_available.append(random.sample(range(action_size), num))
 
+            done = numpy.zeros([batch_size, 1])
+
             returns = agent.train(
-                x, chosen_action, reward, next_x, next_available
+                x, chosen_action, reward, next_x, done, next_available
             )
             # Check replace count
             self.assertEqual(agent._train_step, 1)
             for i in range(2):
                 returns = agent.train(
-                    x, chosen_action, reward, next_x, next_available
+                    x, chosen_action, reward, next_x, done, next_available
                 )
             self.assertEqual(agent._train_step, 3)
 
@@ -326,6 +332,7 @@ class DQNCNN3DTest(tf.test.TestCase):
             next_x = numpy.random.rand(
                 batch_size, depth, height, width, channels[0]
             )
+            done = numpy.zeros([batch_size, 1])
             next_available = []
             for i in range(batch_size):
                 num = random.randint(0, action_size - 1)
@@ -333,7 +340,7 @@ class DQNCNN3DTest(tf.test.TestCase):
 
             # Check loss's shape
             returns = agent.get_loss(
-                x, chosen_action, reward, next_x, next_available
+                x, chosen_action, reward, next_x, done, next_available
             )
             self.assertEqual(returns.shape, (batch_size, 1))
 

@@ -154,15 +154,20 @@ class DQN(RLInterface):
             replace_iter=replace_iter, alpha=alpha, logdir=logdir
         )
 
-    def train(self, x, chosen_action, reward, next_x, next_available=None,
-              learning_rate=None):
+    def train(self, x, chosen_action, reward, next_x, done,
+              next_available=None, learning_rate=None):
         if not learning_rate:
             learning_rate = self._learning_rate
 
         # Create available vector
         chosen_vector = self._create_action_vector(len(x), chosen_action)
         # Compute target value
-        target_value = self._calculate_target_value(reward, next_x, next_available)
+        if self._train_step < self._replace_iter:
+            target_value = reward
+        else:
+            target_value = self._calculate_target_value(
+                reward, next_x, done, next_available
+            )
 
         if self._train_step % 100 == 0 and self._train_writer:
             run_options = tf.RunOptions(trace_level=tf.RunOptions.FULL_TRACE)
@@ -191,13 +196,18 @@ class DQN(RLInterface):
             for r_op in self._replace_ops:
                 self._session.run(r_op)
 
-        return self.get_loss(x, chosen_action, reward, next_x, next_available)
+        return self.get_loss(
+            x, chosen_action, reward, next_x, done, next_available
+        )
 
-    def get_loss(self, x, chosen_action, reward, next_x, next_available=None):
+    def get_loss(self, x, chosen_action, reward, next_x,
+                 done, next_available=None):
         # Create available vector
         chosen_vector = self._create_action_vector(len(x), chosen_action)
         # Compute target value
-        target_value = self._calculate_target_value(reward, next_x, next_available)
+        target_value = self._calculate_target_value(
+            reward, next_x, done, next_available
+        )
 
         return self._session.run(self._td_error, feed_dict={
             self._eval_input: x, self._chosen_holder: chosen_vector,
@@ -293,29 +303,36 @@ class DQN(RLInterface):
             available_vector = numpy.ones([batch_size, self._action_dim])
         return available_vector
 
-    def _calculate_target_value(self, reward, next_x, next_available=None):
+    def _calculate_target_value(self, reward, next_x, done,
+                                next_available=None):
         # Get target Q
         target_q = self._session.run(self._target_q, feed_dict={
             self._target_input: next_x
         })
         # Compute target value from next state
         target_value = []
-        for i in range(len(next_x)):
+        for i in range(len(reward)):
             max_target = -1e9
             if next_available:
                 availabel_list = next_available[i]
             else:
-                availabel_list = range(len(self._action_dim))
+                availabel_list = range(self._action_dim)
             for a_index in availabel_list:
                 if target_q[i][a_index] > max_target:
                     max_target = target_q[i][a_index]
-            target_value.append([reward[i][0] + self._discount * max_target])
+            if done[i][0]:
+                target_value.append([reward[i][0]])
+            else:
+                target_value.append(
+                    [reward[i][0] + self._discount * max_target]
+                )
         return target_value
 
 
 class DoubleDQN(DQN):
 
-    def _calculate_target_value(self, reward, next_x, next_available=None):
+    def _calculate_target_value(self, reward, next_x, done,
+                                next_available=None):
         # Use evaluation to select next state's action
         next_q = self._session.run(
             self._eval_q, feed_dict={self._eval_input: next_x}
@@ -325,20 +342,23 @@ class DoubleDQN(DQN):
         )
         # Compute target value from next state
         target_value = []
-        for i in range(len(next_x)):
+        for i in range(len(reward)):
             max_target = -1e9
             max_index = 0
             if next_available:
                 availabel_list = next_available[i]
             else:
-                availabel_list = range(len(self._action_dim))
+                availabel_list = range(self._action_dim)
             for a_index in availabel_list:
                 if next_q[i][a_index] > max_target:
                     max_target = next_q[i][a_index]
                     max_index = a_index
-            target_value.append(
-                [reward[i][0] + self._discount * target_q[i][max_index]]
-            )
+            if done[i][0]:
+                target_value.append([reward[i][0]])
+            else:
+                target_value.append(
+                    [reward[i][0] + self._discount * target_q[i][max_index]]
+                )
         return target_value
 
 
