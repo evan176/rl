@@ -16,7 +16,7 @@ class PoolInterface():
 
     """
     @abstractmethod
-    def add(self, state, action, reward, next_state,
+    def add(self, state, action, reward, next_state, done,
             next_actions=None, priority=1):
         """
         Pool is used to store experience data, like:
@@ -111,7 +111,7 @@ class MemoryPool(PoolInterface):
 
         self._experiences = []
 
-    def add(self, state, action, reward, next_state,
+    def add(self, state, action, reward, next_state, done,
             next_actions=None, priority=1):
         """
         Add new data to experience pool.
@@ -153,6 +153,7 @@ class MemoryPool(PoolInterface):
             'reward': reward,
             'next_state': next_state,
             'next_actions': next_actions,
+            'done': done,
             'priority': priority,
         }
         self._experiences.append(data)
@@ -365,7 +366,7 @@ class MongoPool(PoolInterface):
 
         self._collection = collection
 
-    def add(self, state, action, reward, next_state,
+    def add(self, state, action, reward, next_state, done,
             next_actions=None, priority=1):
         """
         Add new data to experience pool.
@@ -414,6 +415,7 @@ class MongoPool(PoolInterface):
             'reward': Binary(pickle.dumps(reward)),
             'next_state': Binary(pickle.dumps(next_state)),
             'next_actions': Binary(pickle.dumps(next_actions)),
+            'done': done,
             'priority': priority,
         }
 

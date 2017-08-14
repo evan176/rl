@@ -53,7 +53,7 @@ class MemoryPoolTest(TestCase):
         self.assertEqual(return_value, 6)
 
     def test_add_negative(self):
-        self.pool.add(6, '456', -100, None, [1213, 'a'], -1)
+        self.pool.add(6, '456', -100, None, [1213, 'a'], True, -1)
         self.assertEqual(self.pool._experiences[-1]['priority'], 1e-3)
 
     @mock.patch('rl.pool.MemoryPool.capacity')
