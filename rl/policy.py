@@ -107,15 +107,16 @@ class Critic(RLInterface):
         # Initial variables
         self._session.run(tf.global_variables_initializer())
 
-    def train(self, x, reward, next_x, learning_rate=None):
+    def train(self, x, reward, next_x, done, learning_rate=None):
         if not learning_rate:
             learning_rate=self._learning_rate
 
-        next_value = self.get_value(next_x)
+        target_value = self._calculate_target_value(reward, next_x, done)
 
         self._session.run(self._train_op, feed_dict={
-            self._x_input: x, self._reward: reward,
-            self._next_value: next_value, self._lr_input: learning_rate
+            self._x_input: x,
+            self._target_holder: target_value ,
+            self._lr_input: learning_rate
         })
 
     def get_value(self, x):
@@ -123,18 +124,18 @@ class Critic(RLInterface):
             self._x_input: x
         })
 
-    def get_tderror(self, x, reward, next_x):
-        next_value = self.get_value(next_x)
+    def get_tderror(self, x, reward, next_x, done):
+        target_value = self._calculate_target_value(reward, next_x, done)
         return self._session.run(self._tderror, feed_dict={
-            self._x_input: x, self._reward: reward,
-            self._next_value: next_value
+            self._x_input: x,
+            self._target_holder: target_value
         })
 
-    def get_loss(self, x, reward, next_x):
-        next_value = self.get_value(next_x)
+    def get_loss(self, x, reward, next_x, done):
+        target_value = self._calculate_target_value(reward, next_x, done)
         return self._session.run(self._loss, feed_dict={
-            self._x_input: x, self._reward: reward,
-            self._next_value: next_value
+            self._x_input: x,
+            self._target_holder: target_value
         })
 
     def _build_value(self, network):
@@ -149,10 +150,9 @@ class Critic(RLInterface):
 
     def _build_tderror_op(self):
         with tf.variable_scope("Critic"):
-            self._reward = tf.placeholder(tf.float32, shape=[None, 1])
-            self._next_value = tf.placeholder(tf.float32, shape=[None, 1])
+            self._target_holder = tf.placeholder(tf.float32, shape=[None, 1])
             self._tderror = tf.subtract(
-                self._reward + self._discount * self._next_value,
+                self._target_holder,
                 self._output_value, name="td_error"
             )
 
@@ -169,6 +169,20 @@ class Critic(RLInterface):
             self._train_op = optimizer.minimize(
                 tf.reduce_mean(self._loss), name="train"
             )
+
+    def _calculate_target_value(self, reward, next_x, done):
+        # Get next value
+        next_value = self.get_value(next_x)
+        # Compute target value from next state
+        target_value = []
+        for i in range(len(reward)):
+            if done[i][0]:
+                target_value.append([reward[i][0]])
+            else:
+                target_value.append(
+                    [reward[i][0] + self._discount * next_value[i][0]]
+                )
+        return target_value
 
 
 class ActorCritic(RLInterface):
