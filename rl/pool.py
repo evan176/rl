@@ -76,7 +76,7 @@ class PoolInterface():
 
 class MemoryPool(PoolInterface):
     """
-    MemoryPool uses `list` to store experience data. Data can be sampled
+    MemoryPool uses `dict` to store experience data. Data can be sampled
     after it add to pool. Sample method is biased random sampling with
     priority.
 
@@ -99,7 +99,7 @@ class MemoryPool(PoolInterface):
         >>> print(len(records))
         30
         # Update priority of data
-        >>> priorities = [(id1, 10), (id2, 0), (id3, 9), ...]
+        >>> priorities = [(key1, 10), (key2, 0), (key3, 9), ...]
         >>> mpool.update(priorities)
     """
 
@@ -109,7 +109,8 @@ class MemoryPool(PoolInterface):
                 raise TypeError("Pool size should be positive integer")
             self._size = pool_size
 
-        self._experiences = []
+        self._experiences = {}
+        self._q_front = 0
 
     def add(self, state, action, reward, next_state, done,
             next_actions=None, priority=1):
@@ -147,7 +148,13 @@ class MemoryPool(PoolInterface):
         elif priority > 1e+3:
             priority = 1e+3
 
-        data = {
+        if self._q_front > six.MAXSIZE:
+            self._q_front = 0
+
+        while self._q_front in self._experiences:
+            self._q_front += 1
+
+        self._experiences[self._q_front] = {
             'state': state,
             'action': action,
             'reward': reward,
@@ -156,23 +163,23 @@ class MemoryPool(PoolInterface):
             'done': done,
             'priority': priority,
         }
-        self._experiences.append(data)
+
         if self.capacity() > self.size() > 0:
             min_p = 1e+9
-            min_index = 0
-            for i, record in enumerate(self._experiences):
+            min_key = 0
+            for key, record in self._experiences.items():
                 if record['priority'] < min_p:
                     min_p = record['priority']
-                    min_index = i
-            self.remove(min_index)
+                    min_key = key
+            self.remove(min_key)
         return self.capacity()
 
-    def remove(self, record_id):
+    def remove(self, key):
         """
-        Remove record from pool with record_id.
+        Remove record from pool with key.
 
         Args:
-            record_id: the index of data
+            key: the key of record in dictionary
 
         Returns:
             None
@@ -182,7 +189,7 @@ class MemoryPool(PoolInterface):
             >>> pool.remove(100)
 
         """
-        self._experiences.pop(record_id)
+        return self._experiences.pop(key)
 
     def sample(self, size):
         """
@@ -205,8 +212,10 @@ class MemoryPool(PoolInterface):
 
         """
         dist = []
-        for record in self._experiences:
+        keys = []
+        for k, record in self._experiences.items():
             dist.append(record['priority'])
+            keys.append(k)
 
         sum_d = float(sum(dist))
         prob = [item / sum_d for item in dist]
@@ -214,19 +223,14 @@ class MemoryPool(PoolInterface):
         if size > 0:
             if size > self.capacity():
                 size = self.capacity()
-
-            indexes = numpy.random.choice(
-                list(range(len(prob))),
-                size=size, p=prob, replace=False
+            keys = numpy.random.choice(
+                keys, size=size, p=prob, replace=False
             )
         else:
-            indexes = []
+            keys = []
 
-        samples = list()
-        for i in indexes:
-            samples.append((i, self._experiences[i]))
-        return samples
-
+        for k in keys:
+            yield k, self._experiences[k]
 
     def update(self, priorities):
         """
@@ -251,7 +255,7 @@ class MemoryPool(PoolInterface):
                 ])
 
         """
-        for index, priority in priorities:
+        for key, priority in priorities:
             if numpy.isnan(priority):
                 p = 1e-3
             elif priority < 1e-3:
@@ -261,8 +265,10 @@ class MemoryPool(PoolInterface):
             else:
                 p = priority
 
-            self._experiences[index]['priority'] = p
-
+            try:
+                self._experiences[key]['priority'] = p
+            except:
+                pass
 
     def size(self):
         """
@@ -324,8 +330,8 @@ class MemoryPool(PoolInterface):
             ...
 
         """
-        for record in self._experiences:
-            yield record
+        for key, record in self._experiences.items():
+            yield key, record
 
 
 class MongoPool(PoolInterface):
