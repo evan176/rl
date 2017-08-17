@@ -43,10 +43,10 @@ class MemoryPoolTest(TestCase):
     def tearDown(self):
         self.pool = None
 
-    @mock.patch('rl.pool.MemoryPool.capacity')
-    def test_add(self, mock_capacity):
-        # Handle mock capacity
-        mock_capacity.side_effect = lambda *args: len(self.pool._experiences)
+    @mock.patch('rl.pool.MemoryPool.amount')
+    def test_add(self, mock_amount):
+        # Handle mock amount
+        mock_amount.side_effect = lambda *args: len(self.pool._experiences)
 
         return_value = self.pool.add(6, '456', -100, None, [1213, 'a'], 1)
         self.assertEqual(self.pool._q_front, 3)
@@ -59,10 +59,10 @@ class MemoryPoolTest(TestCase):
             self.pool._experiences[self.pool._q_front]['priority'], 1e-3
         )
 
-    @mock.patch('rl.pool.MemoryPool.capacity')
-    def test_remove(self, mock_capacity):
-        # Handle mock capacity
-        mock_capacity.return_value = len(self.pool._experiences)
+    @mock.patch('rl.pool.MemoryPool.amount')
+    def test_remove(self, mock_amount):
+        # Handle mock amount
+        mock_amount.return_value = len(self.pool._experiences)
 
         return_value = self.pool.remove(4)
         self.assertNotIn(4, self.pool._experiences)
@@ -89,8 +89,8 @@ class MemoryPoolTest(TestCase):
     def test_size(self):
         self.assertEqual(self.pool.size(), 5000)
 
-    def test_capacity(self):
-        self.assertEqual(self.pool.capacity(), 5)
+    def test_amount(self):
+        self.assertEqual(self.pool.amount(), 5)
 
     def test_all(self):
         self.assertIsInstance(self.pool.all(), GeneratorType)
