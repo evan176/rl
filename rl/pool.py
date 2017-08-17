@@ -60,7 +60,7 @@ class PoolInterface():
         pass
 
     @abstractmethod
-    def capacity(self):
+    def amount(self):
         """
         Get number of records in pool
         """
@@ -127,7 +127,7 @@ class MemoryPool(PoolInterface):
             priority: It specify the priority of data (Default: 0)
 
         Returns:
-            capacity: record number in pool
+            amount: record number in pool
 
         Examples:
             >>> mpool.add(
@@ -164,7 +164,7 @@ class MemoryPool(PoolInterface):
             'priority': priority,
         }
 
-        if self.capacity() > self.size() > 0:
+        if self.amount() > self.size() > 0:
             min_p = 1e+9
             min_key = 0
             for key, record in self._experiences.items():
@@ -172,7 +172,7 @@ class MemoryPool(PoolInterface):
                     min_p = record['priority']
                     min_key = key
             self.remove(min_key)
-        return self.capacity()
+        return self.amount()
 
     def remove(self, key):
         """
@@ -221,8 +221,8 @@ class MemoryPool(PoolInterface):
         prob = [item / sum_d for item in dist]
 
         if size > 0:
-            if size > self.capacity():
-                size = self.capacity()
+            if size > self.amount():
+                size = self.amount()
             keys = numpy.random.choice(
                 keys, size=size, p=prob, replace=False
             )
@@ -288,7 +288,7 @@ class MemoryPool(PoolInterface):
         """
         return self._size
 
-    def capacity(self):
+    def amount(self):
         """
         Get number of records in pool
 
@@ -302,10 +302,10 @@ class MemoryPool(PoolInterface):
             >>> mpool = MemoryPool(300)
             >>> print(mpool.size())
             300
-            >>> print(mpool.capacity())
+            >>> print(mpool.amount())
             0
             >>> mpool.add(1, 2, 3, 4)
-            >>> print(mpool.capacity())
+            >>> print(mpool.amount())
             1
 
         """
@@ -387,7 +387,7 @@ class MongoPool(PoolInterface):
             priority: It specify the priority of data (Default: 0)
 
         Returns:
-            capacity: record number in pool
+            amount: record number in pool
 
         Examples:
             >>> mpool.add(
@@ -426,7 +426,7 @@ class MongoPool(PoolInterface):
         }
 
         self._collection.insert_one(data)
-        if self.capacity() > self.size() > 0:
+        if self.amount() > self.size() > 0:
             min_p = 1e+9
             min_index = 0
             for i, record in enumerate(self._experiences):
@@ -434,7 +434,7 @@ class MongoPool(PoolInterface):
                     min_p = record['priority']
                     min_index = i
             self.remove(min_index)
-        return self.capacity()
+        return self.amount()
 
     def remove(self, record_id):
         """
@@ -559,7 +559,7 @@ class MongoPool(PoolInterface):
         """
         return self._size
 
-    def capacity(self):
+    def amount(self):
         """
         Get number of records in pool
 
@@ -573,10 +573,10 @@ class MongoPool(PoolInterface):
             >>> mpool = MemoryPool(300)
             >>> print(mpool.size())
             300
-            >>> print(mpool.capacity())
+            >>> print(mpool.amount())
             0
             >>> mpool.add(1, 2, 3, 4)
-            >>> print(mpool.capacity())
+            >>> print(mpool.amount())
             1
 
         """
