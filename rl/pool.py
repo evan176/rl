@@ -113,7 +113,7 @@ class MemoryPool(PoolInterface):
         self._q_front = 0
 
     def add(self, state, action, reward, next_state, done,
-            next_actions=None, priority=1):
+            next_actions=None, priority=1, info=None):
         """
         Add new data to experience pool.
 
@@ -162,6 +162,7 @@ class MemoryPool(PoolInterface):
             'next_actions': next_actions,
             'done': done,
             'priority': priority,
+            'info': info,
         }
 
         if self.amount() > self.size() > 0:
@@ -373,7 +374,7 @@ class MongoPool(PoolInterface):
         self._collection = collection
 
     def add(self, state, action, reward, next_state, done,
-            next_actions=None, priority=1):
+            next_actions=None, priority=1, info=None):
         """
         Add new data to experience pool.
 
@@ -423,6 +424,7 @@ class MongoPool(PoolInterface):
             'next_actions': Binary(pickle.dumps(next_actions)),
             'done': done,
             'priority': priority,
+            'info': info,
         }
 
         self._collection.insert_one(data)
