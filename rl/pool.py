@@ -269,7 +269,7 @@ class MemoryPool(PoolInterface):
 
             try:
                 self._experiences[key]['priority'] = p
-            except:
+            except (KeyError, TypeError):
                 pass
 
     def size(self):
