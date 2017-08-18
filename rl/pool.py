@@ -3,7 +3,9 @@
 from abc import ABCMeta, abstractmethod
 from bson.binary import Binary
 import math
+import os
 import pickle
+import uuid
 
 import numpy
 import six
@@ -615,3 +617,366 @@ class MongoPool(PoolInterface):
     def _get_last(self):
         condition = {"$query": {}, "$orderby": {"index": -1}}
         return self._collection.find_one(condition)
+
+
+class FilePool(PoolInterface):
+    """
+    FilePool store experience data to file system. Data must be numpy array.
+
+    Args:
+        directory (str): directory for storing data
+        pool_size (int): sepcify size of pool. `0` for unlimited
+            (default: 0)
+
+    Returns:
+        FilePool object
+
+    Examples:
+        # Init pool
+        >>> fpool = FilePool("experiences")
+        # Add data to pool
+        >>> fpool.add(
+                state=[1, 2, 3], action=3, reward=100, next_state=[4, 5, 6]
+            )
+
+        # Sample data for training
+        >>> for path, record in fpool.sample(30):
+        >>>     ...
+
+        # Update priority of data
+        >>> priorities = [(path, 10), (path, 0), (path, 9), ...]
+        >>> fpool.update(priorities)
+    """
+
+    def __init__(self, directory, pool_size=0):
+        if isinstance(pool_size, int):
+            if pool_size < 0:
+                raise TypeError("Pool size should be positive integer")
+            self._size = pool_size
+
+        self._dir = directory
+        self._make_dirs(self._dir)
+        self._indexes = dict()
+        # Synchronization
+        self.sync()
+
+    def add(self, state, action, reward, next_state, done,
+            next_actions=None, priority=1, info=None):
+        """
+        Add new data to pool.
+
+        Args:
+            state: any type as long as it can describe the state of environment
+            action: any type as long as it can represent executed action with
+                above state
+            reward: also free type for action feedback
+            next_state: Like state but it is for describing next state
+            next_actions: For next state's actions (Default: None),
+            priority: It specify the priority of data (Default: 0)
+
+        Returns:
+            amount: record number in pool
+
+        Examples:
+            >>> fpool.add(
+                    state=[0, 0, 1], action=1,
+                    reward=100, next_state=[1, 0, 0]
+                )
+            >>> fpool.add(
+                    state={'a': 1, 'b': 0}, action=3,
+                    reward=-1, next_state={'a': -1, 'b': 1},
+                    next_actions=[3, 1, 0], priority=3.5
+                )
+
+        """
+        if numpy.isnan(priority):
+            priority = 1e-3
+        elif priority < 1e-3:
+            priority = 1e-3
+        elif priority > 1e+3:
+            priority = 1e+3
+
+        if self.amount() > self.size() > 0:
+            path = random.sample(self._indexes.keys(), 1)[0]
+            self.remove(path)
+
+        path = self._save_data(
+            state, action, reward, next_state, done, next_actions
+        )
+        self._indexes[path] = priority
+
+        return self.amount()
+
+    def remove(self, path):
+        """
+        Remove record from pool with path.
+
+        Args:
+            path: the path of specific data
+
+        Returns:
+            None
+
+        Examples:
+            # Remove in pool with key: "~/experiences/sample.npz"
+            >>> pool.remove("~/experiences/smaple.npz")
+
+        """
+        self._remove_data(path)
+        del self._indexes[path]
+
+    def sample(self, size):
+        """
+        Sample records from pool with given size.
+
+        Args:
+            size (int): sampling size
+
+        Returns:
+            path, record (generator):
+                index,
+                {
+                    'state': ..., 'action': ..., 'reward': ...,
+                    'next_state': ..., 'next_actions': ..., 'priority': ...,
+                }
+
+        Examples:
+            # Biased random sampling 100 records
+            >>> pool.sample(100)
+
+        """
+        dist = []
+        paths = []
+        for path, p in self._indexes.items():
+            dist.append(p)
+            paths.append(path)
+
+        sum_d = float(sum(dist))
+        prob = [item / sum_d for item in dist]
+
+        if size > 0:
+            if size > self.amount():
+                size = self.amount()
+            paths = numpy.random.choice(
+                paths, size=size, p=prob, replace=False
+            )
+        else:
+            paths = []
+
+        for path in paths:
+            record = self._load_data(path)
+            if record:
+                record["priority"] = self._indexes[path]
+                yield path, record
+
+    def update(self, priorities):
+        """
+        Update each records' priority
+
+        Args:
+            priorities (list):
+                [
+                 (path, priority),
+                 (...),
+                 ...
+                ]
+
+        Returns:
+            None
+
+        Examples:
+            >>> pool.update([
+                    (0, 10),
+                    (1, 0),
+                    (2, 3)
+                ])
+
+        """
+        for path, priority in priorities:
+            if path in self._indexes:
+                if numpy.isnan(priority):
+                    p = 1e-3
+                elif priority < 1e-3:
+                    p = 1e-3
+                elif priority > 1e+3:
+                    p = 1e+3
+                else:
+                    p = priority
+
+                if path in self._indexes:
+                    self._indexes[path] = p
+
+    def size(self):
+        """
+        Get size of current pool
+
+        Args:
+            None
+
+        Returns:
+            pool_size (int): limited size of pool
+
+        Examples:
+            >>> fpool = FilePool(300)
+            >>> print(fpool.size())
+            300
+
+        """
+        return self._size
+
+    def amount(self):
+        """
+        Get number of records in pool
+
+        Args:
+            None
+
+        Returns:
+            number (int): number of records
+
+        Examples:
+            >>> fpool = FilePool(300)
+            >>> print(fpool.size())
+            300
+            >>> print(fpool.amount())
+            0
+            >>> fpool.add(1, 2, 3, 4)
+            >>> print(fpool.amount())
+            1
+
+        """
+        return len(self._indexes)
+
+    def all(self):
+        """
+        Get all experiences of pool by generator
+
+        Args:
+            None
+
+        Returns:
+            path, record (generator): experience record
+
+        Examples:
+            >>> fpool = FilePool(300)
+            >>> for path, item in fpool.all():
+                    print(item)
+            {'state': ...}
+            {'state': ...}
+            ...
+
+        """
+        for path, priority in self._indexes.items():
+            record = self._load_data(path)
+            if record:
+                record['priority'] = priority
+                yield path, record
+
+    def sync(self):
+        """
+        Synchronize indexes from file system
+
+        Args:
+            None
+
+        Returns:
+            None
+
+        Examples:
+
+        """
+        for dir_path, dir_names, file_names in os.walk(self._dir):
+            for file_name in file_names:
+                if file_name[-4:] == ".npz":
+                    path = os.path.join(dir_path, file_name)
+                    if path not in self._indexes:
+                        self._indexes[path] = 1
+
+    def _make_dirs(self, path):
+        """
+        Create folder if it is not exists
+
+        Args:
+            path (str): target folder
+
+        Returns:
+            None
+
+        Examples:
+
+        """
+        if not os.path.exists(path):
+            os.makedirs(path)
+
+    def _save_data(self, state, action, reward, next_state, done,
+                   next_actions=None):
+        """
+        Save numpy array to disk
+
+        Args:
+            state: any type as long as it can describe the state of environment
+            action: any type as long as it can represent executed action with
+                above state
+            reward: also free type for action feedback
+            next_state: Like state but it is for describing next state
+            next_actions: For next state's actions (Default: None),
+
+        Returns:
+            path (str): file path
+
+        Examples:
+            >>> fpool._save_data(state, action, ...)
+            "/xxx/yyy/zzz/f88fc90a-bc3d-413f-8864-44b21beb7bc5.npz"
+
+        """
+        name = os.path.join(self._dir, str(uuid.uuid4()))
+        numpy.savez(
+            name, state=state, action=action, reward=reward,
+            next_state=next_state, done=done, next_actions=next_actions,
+        )
+        return "{}.npz".format(name)
+
+    def _load_data(self, path):
+        """
+        Load data from disk to memory
+
+        Args:
+            path (str): file path
+
+
+        Returns:
+            record (dict): If IOError then return None
+
+        Examples:
+
+        """
+        try:
+            npzfile = numpy.load(path)
+            return {
+                "state": npzfile["state"],
+                "action": npzfile["action"],
+                "reward": npzfile["reward"],
+                "next_state": npzfile["next_state"],
+                "done": npzfile["done"],
+                "next_actions": npzfile["next_actions"]
+            }
+        except IOError:
+            return None
+
+    def _remove_data(self, path):
+        """
+        Remove data from disk
+
+        Args:
+            path (str): file path
+
+        Returns:
+            None
+
+        Examples:
+
+        """
+        try:
+            os.remove(path)
+        except IOError:
+            pass
