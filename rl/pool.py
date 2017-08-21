@@ -156,6 +156,15 @@ class MemoryPool(PoolInterface):
         while self._q_front in self._experiences:
             self._q_front += 1
 
+        if self.amount() > self.size() > 0:
+            min_p = 1e+9
+            min_key = 0
+            for key, record in self._experiences.items():
+                if record['priority'] < min_p:
+                    min_p = record['priority']
+                    min_key = key
+            self.remove(min_key)
+
         self._experiences[self._q_front] = {
             'state': state,
             'action': action,
@@ -167,14 +176,6 @@ class MemoryPool(PoolInterface):
             'info': info,
         }
 
-        if self.amount() > self.size() > 0:
-            min_p = 1e+9
-            min_key = 0
-            for key, record in self._experiences.items():
-                if record['priority'] < min_p:
-                    min_p = record['priority']
-                    min_key = key
-            self.remove(min_key)
         return self.amount()
 
     def remove(self, key):
@@ -270,7 +271,7 @@ class MemoryPool(PoolInterface):
 
             try:
                 self._experiences[key]['priority'] = p
-            except:
+            except (KeyError, TypeError):
                 pass
 
     def size(self):
