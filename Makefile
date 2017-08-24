@@ -22,6 +22,7 @@ build35:
 
 install:
 	local/bin/pip install -r requirements.txt
+	local/bin/pip install -e .
 
 clean-pyc:
 	find . -name '*.pyc' -exec rm --force {} +
@@ -34,7 +35,7 @@ clean-build:
 	rm --force --recursive *.egg-info
 
 test: clean-pyc
-	. local/bin/activate && python -m pytest "$(TEST_PATH)"
+	. local/bin/activate && pytest "$(TEST_PATH)"
 
 clean: clean-pyc clean-build
 	rm --recursive --force local
