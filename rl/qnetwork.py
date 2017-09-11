@@ -5,12 +5,12 @@ import math
 import numpy
 import tensorflow as tf
 
-from .agent import RLInterface
-from .mlp import (
+from rl.agent import RLInterface
+from rl.mlp import (
     weight_variable, bias_variable, normalize_weight, multilayer_perceptron
 )
-from .cnn import conv_net
-from .utils import summarize_variable
+from rl.cnn import conv_net
+from rl.utils import summarize_variable
 
 
 class DQN(RLInterface):
@@ -221,42 +221,44 @@ class DQN(RLInterface):
 
     def _build_q(self):
         w_name, b_name = "w_out", "b_out"
-        with tf.variable_scope("eval_network"):
+        with tf.name_scope("eval_network"):
             w = weight_variable([self._fc_dim, self._action_dim], w_name)
             b = bias_variable([self._action_dim], b_name)
 
             summarize_variable(w, w_name)
             summarize_variable(b, b_name)
 
-            norm_w = normalize_weight(w, 0, name="norm_out")
+            # norm_w = normalize_weight(w, 0, name="norm_out")
 
             self._eval_vars[w_name] = w
             self._eval_vars[b_name] = b
             with tf.name_scope("eval_q") as scope:
                 self._eval_q = tf.add(
-                    tf.matmul(self._eval_network, norm_w), b,
+                    # tf.matmul(self._eval_network, norm_w), b,
+                    tf.matmul(self._eval_network, w), b,
                     name="eval_q"
                 )
 
-        with tf.variable_scope("target_network"):
+        with tf.name_scope("target_network"):
             w = weight_variable([self._fc_dim, self._action_dim], w_name)
             b = bias_variable([self._action_dim], b_name)
 
             summarize_variable(w, w_name)
             summarize_variable(b, b_name)
 
-            norm_w = normalize_weight(w, 0, name="norm_out")
+            # norm_w = normalize_weight(w, 0, name="norm_out")
 
             self._target_vars[w_name] = w
             self._target_vars[b_name] = b
             with tf.name_scope("target_q") as scope:
                 self._target_q = tf.add(
-                    tf.matmul(self._target_network, norm_w), b,
+                    # tf.matmul(self._target_network, norm_w), b,
+                    tf.matmul(self._target_network, w), b,
                     name="target_q"
                 )
 
     def _build_tderror(self):
-        with tf.variable_scope("DQN"):
+        with tf.name_scope("DQN"):
             # Create holder for chosen
             self._chosen_holder = tf.placeholder(
                 tf.float32, [None, self._action_dim], name="chosen_action"
@@ -277,7 +279,7 @@ class DQN(RLInterface):
 
     def _build_train_op(self):
         # Opimize loss
-        with tf.variable_scope("DQN"):
+        with tf.name_scope("DQN"):
             self._lr_input = tf.placeholder(tf.float32, shape=[])
             self._loss = tf.losses.huber_loss(
                 self._target_holder, self._eval_predict
@@ -372,7 +374,7 @@ class DuelingDQN(DQN):
     def _build_q(self):
         v_w_name, v_b_name = "val_w", "val_b"
         a_w_name, a_b_name = "adv_w", "adv_b"
-        with tf.variable_scope("eval_network"):
+        with tf.name_scope("eval_network"):
             v_w = weight_variable([self._fc_dim, 1], v_w_name)
             v_b = bias_variable([1], v_b_name)
             a_w = weight_variable([self._fc_dim, self._action_dim], a_w_name)
@@ -387,18 +389,20 @@ class DuelingDQN(DQN):
             summarize_variable(a_w, a_w_name)
             summarize_variable(a_b, a_b_name)
 
-            norm_v_w = normalize_weight(v_w, 0, name="norm_val")
-            norm_a_w = normalize_weight(a_w, 0, name="norm_adv")
+            # norm_v_w = normalize_weight(v_w, 0, name="norm_val")
+            # norm_a_w = normalize_weight(a_w, 0, name="norm_adv")
 
             # Action-independent value function
             with tf.name_scope("eval_value") as scope:
                 self._eval_val = tf.add(
-                    tf.matmul(self._eval_network, norm_v_w), v_b,
+                    # tf.matmul(self._eval_network, norm_v_w), v_b,
+                    tf.matmul(self._eval_network, v_w), v_b,
                     name="eval_value")
             # Action-dependent advantage function
             with tf.name_scope("eval_advantage") as scope:
                 self._eval_adv = tf.add(
-                    tf.matmul(self._eval_network, norm_a_w), a_b,
+                    # tf.matmul(self._eval_network, norm_a_w), a_b,
+                    tf.matmul(self._eval_network, a_w), a_b,
                     name="eval_advantage"
                 )
             # Q funciton
@@ -412,7 +416,7 @@ class DuelingDQN(DQN):
                     self._eval_val, adv_mean, name="eval_q"
                 )
 
-        with tf.variable_scope("target_network"):
+        with tf.name_scope("target_network"):
             v_w = weight_variable([self._fc_dim, 1], v_w_name)
             v_b = bias_variable([1], v_b_name)
             a_w = weight_variable([self._fc_dim, self._action_dim], a_w_name)
@@ -427,19 +431,21 @@ class DuelingDQN(DQN):
             summarize_variable(a_w, a_w_name)
             summarize_variable(a_b, a_b_name)
 
-            norm_v_w = normalize_weight(v_w, 0, name="norm_val")
-            norm_a_w = normalize_weight(a_w, 0, name="norm_adv")
+            # norm_v_w = normalize_weight(v_w, 0, name="norm_val")
+            # norm_a_w = normalize_weight(a_w, 0, name="norm_adv")
 
             # Action-independent value function
             with tf.name_scope("target_value") as scope:
                 self._target_val = tf.add(
-                    tf.matmul(self._target_network, norm_v_w), v_b,
+                    # tf.matmul(self._target_network, norm_v_w), v_b,
+                    tf.matmul(self._target_network, v_w), v_b,
                     name="target_value"
                 )
             # Action-dependent advantage function
             with tf.name_scope("target_advantage") as scope:
                 self._target_adv = tf.add(
-                    tf.matmul(self._target_network, norm_a_w), a_b,
+                    # tf.matmul(self._target_network, norm_a_w), a_b,
+                    tf.matmul(self._target_network, a_w), a_b,
                     name="target_advantage"
                 )
             # Q funciton

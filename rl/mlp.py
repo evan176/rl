@@ -2,7 +2,7 @@
 # -*- coding: utf-8 -*-
 import tensorflow as tf
 
-from .utils import summarize_variable
+from rl.utils import summarize_variable
 
 
 def weight_variable(shape, name=None):
@@ -54,8 +54,7 @@ def normalize_weight(w, dim, name=None, epsilon=1e-12):
 
 
 def LeakyReLU(x, alpha, name=None):
-    with tf.name_scope(name) as scope:
-        return tf.maximum(alpha * x, x, name=name)
+    return tf.maximum(alpha * x, x, name=name)
 
 
 def multilayer_perceptron(dimensions, alpha=1e-3):
@@ -82,7 +81,7 @@ def multilayer_perceptron(dimensions, alpha=1e-3):
     """
     variables = {}
 
-    input_x = tf.placeholder(tf.float32, [None, dimensions[0]], name="input_x")
+    input_x = tf.placeholder(tf.float32, [None, dimensions[0]], name="x")
 
     x = input_x
     for i in range(len(dimensions) - 1):
@@ -97,12 +96,13 @@ def multilayer_perceptron(dimensions, alpha=1e-3):
         variables[b_name] = b
         summarize_variable(w, w_name)
         summarize_variable(b, b_name)
-        norm_w = normalize_weight(w, 0, "norm_{}".format(i))
+        # norm_w = normalize_weight(w, 0, "norm_{}".format(i))
 
         with tf.name_scope(y_name) as scope:
-            y = tf.add(tf.matmul(x, norm_w), b, name=y_name)
+            # y = tf.add(tf.matmul(x, norm_w), b, name=y_name)
+            y = tf.add(tf.matmul(x, w), b, name=y_name)
+            x = LeakyReLU(y, alpha, name=act_y_name)
 
-        x = LeakyReLU(y, alpha, name=act_y_name)
     network = x
 
     return network, input_x, variables
