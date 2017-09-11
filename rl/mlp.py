@@ -54,8 +54,7 @@ def normalize_weight(w, dim, name=None, epsilon=1e-12):
 
 
 def LeakyReLU(x, alpha, name=None):
-    with tf.name_scope(name) as scope:
-        return tf.maximum(alpha * x, x, name=name)
+    return tf.maximum(alpha * x, x, name=name)
 
 
 def multilayer_perceptron(dimensions, alpha=1e-3):
