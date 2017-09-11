@@ -81,7 +81,7 @@ def multilayer_perceptron(dimensions, alpha=1e-3):
     """
     variables = {}
 
-    input_x = tf.placeholder(tf.float32, [None, dimensions[0]], name="input_x")
+    input_x = tf.placeholder(tf.float32, [None, dimensions[0]], name="x")
 
     x = input_x
     for i in range(len(dimensions) - 1):
@@ -101,8 +101,8 @@ def multilayer_perceptron(dimensions, alpha=1e-3):
         with tf.name_scope(y_name) as scope:
             # y = tf.add(tf.matmul(x, norm_w), b, name=y_name)
             y = tf.add(tf.matmul(x, w), b, name=y_name)
+            x = LeakyReLU(y, alpha, name=act_y_name)
 
-        x = LeakyReLU(y, alpha, name=act_y_name)
     network = x
 
     return network, input_x, variables
