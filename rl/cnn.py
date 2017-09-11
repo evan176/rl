@@ -73,13 +73,14 @@ def conv_net(channels, filters, poolings, width, height, depth=None,
             summarize_variable(w, w_name)
             summarize_variable(b, b_name)
 
-            norm_w = normalize_weight(
-                w, [0, 1, 2, 3], name=norm_name
-            )
+            # norm_w = normalize_weight(
+            #     w, [0, 1, 2, 3], name=norm_name
+            # )
 
             with tf.name_scope(y_name) as scope:
                 y = tf.add(
-                    tf.nn.conv3d(x, norm_w, strides=[1, 1, 1, 1, 1], padding='SAME'),
+                    # tf.nn.conv3d(x, norm_w, strides=[1, 1, 1, 1, 1], padding='SAME'),
+                    tf.nn.conv3d(x, w, strides=[1, 1, 1, 1, 1], padding='SAME'),
                     b, name=y_name
                 )
 
@@ -103,13 +104,14 @@ def conv_net(channels, filters, poolings, width, height, depth=None,
             summarize_variable(w, w_name)
             summarize_variable(b, b_name)
 
-            norm_w = normalize_weight(
-                w, [0, 1, 2], name=norm_name
-            )
+            # norm_w = normalize_weight(
+            #     w, [0, 1, 2], name=norm_name
+            # )
 
             with tf.name_scope(y_name) as scope:
                 y = tf.add(
-                    tf.nn.conv2d(x, norm_w, strides=[1, 1, 1, 1], padding='SAME'),
+                    # tf.nn.conv2d(x, norm_w, strides=[1, 1, 1, 1], padding='SAME'),
+                    tf.nn.conv2d(x, w, strides=[1, 1, 1, 1], padding='SAME'),
                     b, name=y_name
                 )
 
@@ -140,12 +142,13 @@ def conv_net(channels, filters, poolings, width, height, depth=None,
     summarize_variable(variables[w_name], w_name)
     summarize_variable(variables[b_name], b_name)
 
-    norm_w = normalize_weight(
-        variables[w_name], 0, name="norm_fc"
-    )
+    # norm_w = normalize_weight(
+    #     variables[w_name], 0, name="norm_fc"
+    # )
 
     with tf.name_scope(y_name) as scope:
-        y = tf.add(tf.matmul(h_flat, norm_w), variables[b_name], name=y_name)
+        # y = tf.add(tf.matmul(h_flat, norm_w), variables[b_name], name=y_name)
+        y = tf.add(tf.matmul(h_flat, variables[w_name]), variables[b_name], name=y_name)
 
     h_fc = LeakyReLU(y, alpha, name=act_y_name)
 

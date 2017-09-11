@@ -97,10 +97,11 @@ def multilayer_perceptron(dimensions, alpha=1e-3):
         variables[b_name] = b
         summarize_variable(w, w_name)
         summarize_variable(b, b_name)
-        norm_w = normalize_weight(w, 0, "norm_{}".format(i))
+        # norm_w = normalize_weight(w, 0, "norm_{}".format(i))
 
         with tf.name_scope(y_name) as scope:
-            y = tf.add(tf.matmul(x, norm_w), b, name=y_name)
+            # y = tf.add(tf.matmul(x, norm_w), b, name=y_name)
+            y = tf.add(tf.matmul(x, w), b, name=y_name)
 
         x = LeakyReLU(y, alpha, name=act_y_name)
     network = x
