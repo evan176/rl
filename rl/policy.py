@@ -46,7 +46,7 @@ class Actor(RLInterface):
         pass
 
     def _build_value(self, network):
-        with tf.variable_scope("Actor"):
+        with tf.name_scope("Actor"):
             w = weight_variable([self._fc_dim, self._output_dim])
             b = bias_variable([self._output_dim])
             self._vars['out_w'] = w
@@ -56,7 +56,7 @@ class Actor(RLInterface):
             ))
 
     def _build_train_op(self):
-        with tf.variable_scope("Actor"):
+        with tf.name_scope("Actor"):
             self._lr_input = tf.placeholder(tf.float32, shape=[])
             self._chosen_holder = tf.placeholder(
                 tf.float32, shape=[None, self._output_dim]
@@ -139,7 +139,7 @@ class Critic(RLInterface):
         })
 
     def _build_value(self, network):
-        with tf.variable_scope("Critic"):
+        with tf.name_scope("Critic"):
             w = weight_variable([self._fc_dim, self._output_dim])
             b = bias_variable([self._output_dim])
             self._vars['out_w'] = w
@@ -149,7 +149,7 @@ class Critic(RLInterface):
             )
 
     def _build_tderror_op(self):
-        with tf.variable_scope("Critic"):
+        with tf.name_scope("Critic"):
             self._target_holder = tf.placeholder(tf.float32, shape=[None, 1])
             self._tderror = tf.subtract(
                 self._target_holder,
@@ -157,13 +157,13 @@ class Critic(RLInterface):
             )
 
     def _build_loss_op(self):
-        with tf.variable_scope("Critic"):
+        with tf.name_scope("Critic"):
             self._loss = tf.losses.huber_loss(
                 self._target_holder, self._output_value
             )
 
     def _build_train_op(self):
-        with tf.variable_scope("Critic"):
+        with tf.name_scope("Critic"):
             self._lr_input = tf.placeholder(tf.float32, shape=[])
             optimizer = tf.train.AdamOptimizer(
                 learning_rate=self._lr_input

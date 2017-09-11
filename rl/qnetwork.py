@@ -221,7 +221,7 @@ class DQN(RLInterface):
 
     def _build_q(self):
         w_name, b_name = "w_out", "b_out"
-        with tf.variable_scope("eval_network"):
+        with tf.name_scope("eval_network"):
             w = weight_variable([self._fc_dim, self._action_dim], w_name)
             b = bias_variable([self._action_dim], b_name)
 
@@ -238,7 +238,7 @@ class DQN(RLInterface):
                     name="eval_q"
                 )
 
-        with tf.variable_scope("target_network"):
+        with tf.name_scope("target_network"):
             w = weight_variable([self._fc_dim, self._action_dim], w_name)
             b = bias_variable([self._action_dim], b_name)
 
@@ -256,7 +256,7 @@ class DQN(RLInterface):
                 )
 
     def _build_tderror(self):
-        with tf.variable_scope("DQN"):
+        with tf.name_scope("DQN"):
             # Create holder for chosen
             self._chosen_holder = tf.placeholder(
                 tf.float32, [None, self._action_dim], name="chosen_action"
@@ -277,7 +277,7 @@ class DQN(RLInterface):
 
     def _build_train_op(self):
         # Opimize loss
-        with tf.variable_scope("DQN"):
+        with tf.name_scope("DQN"):
             self._lr_input = tf.placeholder(tf.float32, shape=[])
             self._loss = tf.losses.huber_loss(
                 self._target_holder, self._eval_predict
@@ -372,7 +372,7 @@ class DuelingDQN(DQN):
     def _build_q(self):
         v_w_name, v_b_name = "val_w", "val_b"
         a_w_name, a_b_name = "adv_w", "adv_b"
-        with tf.variable_scope("eval_network"):
+        with tf.name_scope("eval_network"):
             v_w = weight_variable([self._fc_dim, 1], v_w_name)
             v_b = bias_variable([1], v_b_name)
             a_w = weight_variable([self._fc_dim, self._action_dim], a_w_name)
@@ -412,7 +412,7 @@ class DuelingDQN(DQN):
                     self._eval_val, adv_mean, name="eval_q"
                 )
 
-        with tf.variable_scope("target_network"):
+        with tf.name_scope("target_network"):
             v_w = weight_variable([self._fc_dim, 1], v_w_name)
             v_b = bias_variable([1], v_b_name)
             a_w = weight_variable([self._fc_dim, self._action_dim], a_w_name)
