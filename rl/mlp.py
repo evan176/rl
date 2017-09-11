@@ -2,7 +2,7 @@
 # -*- coding: utf-8 -*-
 import tensorflow as tf
 
-from .utils import summarize_variable
+from rl.utils import summarize_variable
 
 
 def weight_variable(shape, name=None):

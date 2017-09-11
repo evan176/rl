@@ -5,9 +5,9 @@ import math
 import numpy
 import tensorflow as tf
 
-from .agent import RLInterface
-from .mlp import weight_variable, bias_variable, multilayer_perceptron
-from .cnn import conv_net
+from rl.agent import RLInterface
+from rl.mlp import weight_variable, bias_variable, multilayer_perceptron
+from rl.cnn import conv_net
 
 
 class Actor(RLInterface):

@@ -3,10 +3,10 @@
 import numpy
 import tensorflow as tf
 
-from .mlp import (
+from rl.mlp import (
     weight_variable, bias_variable, normalize_weight, LeakyReLU
 )
-from .utils import summarize_variable
+from rl.utils import summarize_variable
 
 
 def conv_net(channels, filters, poolings, width, height, depth=None,

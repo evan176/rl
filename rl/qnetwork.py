@@ -5,12 +5,12 @@ import math
 import numpy
 import tensorflow as tf
 
-from .agent import RLInterface
-from .mlp import (
+from rl.agent import RLInterface
+from rl.mlp import (
     weight_variable, bias_variable, normalize_weight, multilayer_perceptron
 )
-from .cnn import conv_net
-from .utils import summarize_variable
+from rl.cnn import conv_net
+from rl.utils import summarize_variable
 
 
 class DQN(RLInterface):
