@@ -1,8 +1,18 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
+from __future__ import absolute_import
+from __future__ import division
+from __future__ import print_function
+
 import math
 
+try:
+    range = xrange
+except:
+    pass
+
 import numpy
+import six
 import tensorflow as tf
 
 from rl.agent import RLInterface
@@ -292,7 +302,7 @@ class DQN(RLInterface):
 
     def _build_replace_op(self):
         self._replace_ops = []
-        for key, var in self._eval_vars.items():
+        for key, var in six.iteritems(self._eval_vars):
             self._replace_ops.append(self._target_vars[key].assign(var))
 
     def _create_action_vector(self, batch_size, next_available=None):

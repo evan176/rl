@@ -1,5 +1,15 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
+from __future__ import absolute_import
+from __future__ import division
+from __future__ import print_function
+
+try:
+    range = xrange
+except:
+    pass
+
+import six
 import tensorflow as tf
 
 from rl.utils import summarize_variable

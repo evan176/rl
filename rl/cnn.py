@@ -1,6 +1,16 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
+from __future__ import absolute_import
+from __future__ import division
+from __future__ import print_function
+
+try:
+    range = xrange
+except:
+    pass
+
 import numpy
+import six
 import tensorflow as tf
 
 from rl.mlp import (
@@ -51,7 +61,7 @@ def conv_net(channels, filters, poolings, width, height, depth=None,
         input_dims = [None, depth, height, width, channels[0]]
     else:
         input_dims = [None, height, width, channels[0]]
-    input_x = tf.placeholder(tf.float32, input_dims, name="input_x")
+    input_x = tf.placeholder(tf.float32, input_dims, name="x")
 
     x = input_x
     for i in range(len(filters)):
@@ -83,8 +93,7 @@ def conv_net(channels, filters, poolings, width, height, depth=None,
                     tf.nn.conv3d(x, w, strides=[1, 1, 1, 1, 1], padding='SAME'),
                     b, name=y_name
                 )
-
-            h_conv = LeakyReLU(y, alpha, name=act_y_name)
+                h_conv = LeakyReLU(y, alpha, name=act_y_name)
 
             pooling_shape = [
                 1, poolings[i][0], poolings[i][1], poolings[i][2], 1
@@ -114,8 +123,7 @@ def conv_net(channels, filters, poolings, width, height, depth=None,
                     tf.nn.conv2d(x, w, strides=[1, 1, 1, 1], padding='SAME'),
                     b, name=y_name
                 )
-
-            h_conv = LeakyReLU(y, alpha, name=act_y_name)
+                h_conv = LeakyReLU(y, alpha, name=act_y_name)
 
             pooling_shape = [1, poolings[i][0], poolings[i][1], 1]
             h_pool = tf.nn.max_pool(
@@ -149,7 +157,6 @@ def conv_net(channels, filters, poolings, width, height, depth=None,
     with tf.name_scope(y_name) as scope:
         # y = tf.add(tf.matmul(h_flat, norm_w), variables[b_name], name=y_name)
         y = tf.add(tf.matmul(h_flat, variables[w_name]), variables[b_name], name=y_name)
-
-    h_fc = LeakyReLU(y, alpha, name=act_y_name)
+        h_fc = LeakyReLU(y, alpha, name=act_y_name)
 
     return h_fc, input_x, variables

@@ -1,8 +1,18 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
+from __future__ import absolute_import
+from __future__ import division
+from __future__ import print_function
+
 import math
 
+try:
+    range = xrange
+except:
+    pass
+
 import numpy
+import six
 import tensorflow as tf
 
 from rl.agent import RLInterface
@@ -177,7 +187,7 @@ class Critic(RLInterface):
         next_value = self.get_value(next_x)
         # Compute target value from next state
         target_value = []
-        for i in range(len(reward)):
+        for i in six.range(len(reward)):
             if done[i][0]:
                 target_value.append([reward[i][0]])
             else:

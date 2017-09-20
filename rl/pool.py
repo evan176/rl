@@ -1,13 +1,22 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
+from __future__ import absolute_import
+from __future__ import division
+from __future__ import print_function
+
 from abc import ABCMeta, abstractmethod
 from bson.binary import Binary
-import math
 import os
 import pickle
 import uuid
 
+try:
+    range = xrange
+except:
+    pass
+
 import numpy
+import pymongo
 import six
 
 
@@ -19,7 +28,7 @@ class PoolInterface():
     """
     @abstractmethod
     def add(self, state, action, reward, next_state, done,
-            next_actions=None, priority=1):
+            next_actions=None, priority=1, info=None):
         """
         Pool is used to store experience data, like:
           (state, action, reward, next_state). It must contains 4 things :
@@ -34,9 +43,9 @@ class PoolInterface():
         pass
 
     @abstractmethod
-    def remove(self, record_id):
+    def remove(self, index):
         """
-        Remove record from pool with record_id
+        Remove record from pool with index
         """
         pass
 
@@ -76,6 +85,111 @@ class PoolInterface():
         pass
 
 
+def filter_priority(value):
+    if numpy.isnan(value):
+        return 1e-3
+    elif value < 1e-3:
+        return 1e-3
+    elif value > 1e+3:
+        return 1e+3
+    return value
+
+
+def bias_sample(dist, size):
+    if size > 0 and dist:
+        if size > len(dist):
+            samples = range(len(dist))
+        else:
+            sum_d = float(sum(dist))
+            prob = [item / sum_d for item in dist]
+
+            samples = numpy.random.choice(
+                range(len(dist)),
+                size=size, p=prob, replace=False
+            )
+            samples = samples.tolist()
+    else:
+        samples = []
+    return samples
+
+
+def encode_data(data):
+    data['state'] = Binary(pickle.dumps(data['state']))
+    data['action'] = Binary(pickle.dumps(data['action']))
+    data['reward'] = Binary(pickle.dumps(data['reward']))
+    data['next_state'] = Binary(pickle.dumps(data['next_state']))
+    data['next_actions'] = Binary(pickle.dumps(data['next_actions']))
+    return data
+
+
+def decode_data(data):
+    data['state'] = pickle.loads(data['state'])
+    data['action'] = pickle.loads(data['action'])
+    data['reward'] = pickle.loads(data['reward'])
+    data['next_state'] = pickle.loads(data['next_state'])
+    data['next_actions'] = pickle.loads(data['next_actions'])
+    return data
+
+
+def save_data(file_name, state, action, reward, next_state,
+              done, next_actions, priority, info):
+    """
+    Save numpy array to disk
+
+    Args:
+        state: any type as long as it can describe the state of environment
+        action: any type as long as it can represent executed action with
+            above state
+        reward: also free type for action feedback
+        next_state: Like state but it is for describing next state
+        next_actions: For next state's actions (Default: None),
+
+    Returns:
+        path (str): file path
+
+    Examples:
+        >>> fpool._save_data(state, action, ...)
+        "/xxx/yyy/zzz/f88fc90a-bc3d-413f-8864-44b21beb7bc5.npz"
+
+    """
+    numpy.savez(
+        file_name, state=state, action=action, reward=reward,
+        next_state=next_state, done=done, next_actions=next_actions,
+        priority=priority, info=info
+    )
+    return "{}.npz".format(file_name)
+
+
+def load_data(path):
+    """
+    Load data from disk to memory
+
+    Args:
+        path (str): file path
+
+
+    Returns:
+        record (dict): If IOError then return None
+
+    Examples:
+
+    """
+    try:
+        npzfile = numpy.load(path)
+        return {
+            "state": npzfile["state"],
+            "action": npzfile["action"],
+            "reward": npzfile["reward"],
+            "next_state": npzfile["next_state"],
+            "done": npzfile["done"],
+            "next_actions": npzfile["next_actions"],
+            "priority": npzfile["priority"],
+            "info": npzfile["info"],
+        }
+    except IOError:
+        return None
+
+
 class MemoryPool(PoolInterface):
     """
     MemoryPool uses `dict` to store experience data. Data can be sampled
@@ -106,11 +220,12 @@ class MemoryPool(PoolInterface):
     """
 
     def __init__(self, pool_size=0):
-        if isinstance(pool_size, int):
-            if pool_size < 0:
-                raise TypeError("Pool size should be positive integer")
-            self._size = pool_size
+        if not isinstance(pool_size, int):
+            raise TypeError("Pool size should be positive integer")
+        if pool_size < 0:
+            raise TypeError("Pool size should be positive integer")
 
+        self._size = pool_size
         self._experiences = {}
         self._q_front = 0
 
@@ -143,28 +258,12 @@ class MemoryPool(PoolInterface):
                 )
 
         """
-        if numpy.isnan(priority):
-            priority = 1e-3
-        elif priority < 1e-3:
-            priority = 1e-3
-        elif priority > 1e+3:
-            priority = 1e+3
-
-        if self._q_front > six.MAXSIZE:
+        priority = filter_priority(priority)
+        if self._q_front + 1 >= self._size > 0:
             self._q_front = 0
-
-        while self._q_front in self._experiences:
+        else:
             self._q_front += 1
-
-        if self.amount() > self.size() > 0:
-            min_p = 1e+9
-            min_key = 0
-            for key, record in self._experiences.items():
-                if record['priority'] < min_p:
-                    min_p = record['priority']
-                    min_key = key
-            self.remove(min_key)
-
+        # Add new data
         self._experiences[self._q_front] = {
             'state': state,
             'action': action,
@@ -175,8 +274,6 @@ class MemoryPool(PoolInterface):
             'priority': priority,
             'info': info,
         }
-
-        return self.amount()
 
     def remove(self, key):
         """
@@ -193,7 +290,7 @@ class MemoryPool(PoolInterface):
             >>> pool.remove(100)
 
         """
-        return self._experiences.pop(key)
+        del self._experiences[key]
 
     def sample(self, size):
         """
@@ -217,24 +314,14 @@ class MemoryPool(PoolInterface):
         """
         dist = []
         keys = []
-        for k, record in self._experiences.items():
+        for k, record in six.iteritems(self._experiences):
             dist.append(record['priority'])
             keys.append(k)
 
-        sum_d = float(sum(dist))
-        prob = [item / sum_d for item in dist]
+        samples = bias_sample(dist, size)
 
-        if size > 0:
-            if size > self.amount():
-                size = self.amount()
-            keys = numpy.random.choice(
-                keys, size=size, p=prob, replace=False
-            )
-        else:
-            keys = []
-
-        for k in keys:
-            yield k, self._experiences[k]
+        for i in samples:
+            yield keys[i], self._experiences[keys[i]]
 
     def update(self, priorities):
         """
@@ -260,17 +347,8 @@ class MemoryPool(PoolInterface):
 
         """
         for key, priority in priorities:
-            if numpy.isnan(priority):
-                p = 1e-3
-            elif priority < 1e-3:
-                p = 1e-3
-            elif priority > 1e+3:
-                p = 1e+3
-            else:
-                p = priority
-
             try:
-                self._experiences[key]['priority'] = p
+                self._experiences[key]['priority'] = filter_priority(priority)
             except (KeyError, TypeError):
                 pass
 
@@ -334,7 +412,7 @@ class MemoryPool(PoolInterface):
             ...
 
         """
-        for key, record in self._experiences.items():
+        for key, record in six.iteritems(self._experiences):
             yield key, record
 
 
@@ -369,11 +447,14 @@ class MongoPool(PoolInterface):
     """
 
     def __init__(self, collection, pool_size=0):
-        if isinstance(pool_size, int):
-            if pool_size < 0:
-                raise TypeError("Pool size should be positive integer")
-            self._size = pool_size
+        if not isinstance(pool_size, int):
+            raise TypeError("Pool size should be positive integer")
+        if pool_size < 0:
+            raise TypeError("Pool size should be positive integer")
+        if not isinstance(collection, pymongo.collection.Collection):
+            raise TypeError("Collection should be pymongo.Collection")
 
+        self._size = pool_size
         self._collection = collection
 
     def add(self, state, action, reward, next_state, done,
@@ -405,48 +486,30 @@ class MongoPool(PoolInterface):
                 )
 
         """
-        if numpy.isnan(priority):
-            priority = 1e-3
-        elif priority < 1e-3:
-            priority = 1e-3
-        elif priority > 1e+3:
-            priority = 1e+3
+        priority = filter_priority(priority)
 
         last_record = self._get_last()
         if last_record:
             index = last_record['index'] + 1
+            if self.amount() >= self.size() > 0:
+                first_record = self._get_first()
+                self.remove(first_record["index"])
         else:
             index = 0
 
-        data = {
-            'index': index,
-            'state': Binary(pickle.dumps(state)),
-            'action': Binary(pickle.dumps(action)),
-            'reward': Binary(pickle.dumps(reward)),
-            'next_state': Binary(pickle.dumps(next_state)),
-            'next_actions': Binary(pickle.dumps(next_actions)),
-            'done': done,
-            'priority': priority,
-            'info': info,
-        }
+        self._collection.insert_one(encode_data({
+            'index': index, 'state': state, 'action': action,
+            'reward': reward, 'next_state': next_state,
+            'next_actions': next_actions, 'done': done,
+            'priority': priority, 'info': info,
+        }))
 
-        self._collection.insert_one(data)
-        if self.amount() > self.size() > 0:
-            min_p = 1e+9
-            min_index = 0
-            for i, record in enumerate(self._experiences):
-                if record['priority'] < min_p:
-                    min_p = record['priority']
-                    min_index = i
-            self.remove(min_index)
-        return self.amount()
-
-    def remove(self, record_id):
+    def remove(self, index):
         """
-        Remove record from pool with record_id.
+        Remove record from pool with index.
 
         Args:
-            record_id: the index of data
+            index: the index of data
 
         Returns:
             None
@@ -456,7 +519,7 @@ class MongoPool(PoolInterface):
             >>> pool.remove(100)
 
         """
-        self._collection.remove({'index': record_id})
+        self._collection.remove({'index': index})
 
     def sample(self, size):
         """
@@ -481,33 +544,15 @@ class MongoPool(PoolInterface):
         dist = []
         indexes = []
         for record in self._collection.find({}, {'index': 1, 'priority': 1}):
+            print(record)
             dist.append(record['priority'])
             indexes.append(record['index'])
+        
+        samples = bias_sample(dist, size)
 
-        sum_d = float(sum(dist))
-        prob = [item / sum_d for item in dist]
-
-        if size > 0 and indexes:
-            if size > len(indexes):
-                size = len(indexes)
-
-            indexes = numpy.random.choice(
-                indexes,
-                size=size, p=prob, replace=False
-            )
-            indexes = indexes.tolist()
-        else:
-            indexes = []
-
-        samples = list()
-        for record in self._collection.find({'index': {'$in': indexes}}):
-            record['state'] = pickle.loads(record['state'])
-            record['action'] = pickle.loads(record['action'])
-            record['reward'] = pickle.loads(record['reward'])
-            record['next_state'] = pickle.loads(record['next_state'])
-            record['next_actions'] = pickle.loads(record['next_actions'])
-            samples.append((record['index'], record))
-        return samples
+        condition = {'index': {'$in': [indexes[i] for i in samples]}}
+        for record in self._collection.find(condition):
+            yield record['index'], decode_data(record)
 
     def update(self, priorities):
         """
@@ -533,17 +578,9 @@ class MongoPool(PoolInterface):
 
         """
         for index, priority in priorities:
-            if numpy.isnan(priority):
-                p = 1e-3
-            elif priority < 1e-3:
-                p = 1e-3
-            elif priority > 1e+3:
-                p = 1e+3
-            else:
-                p = priority
-
             self._collection.update_one(
-                {"index": index}, {"$set": {"priority": p}}
+                {"index": index},
+                {"$set": {"priority": filter_priority(priority)}}
             )
 
     def size(self):
@@ -606,18 +643,20 @@ class MongoPool(PoolInterface):
             ...
 
         """
-        condition = {"$query": {}, "$orderby": {"id": 1}}
-        for record in self._collection.find(condition):
-            record['state'] = pickle.loads(record['state'])
-            record['action'] = pickle.loads(record['action'])
-            record['reward'] = pickle.loads(record['reward'])
-            record['next_state'] = pickle.loads(record['next_state'])
-            record['next_actions'] = pickle.loads(record['next_actions'])
-            yield record
+        for record in self._collection.find().sort("index", 1):
+            yield record['index'], decode_data(record)
+
+    def _get_first(self):
+        if self.amount() > 0:
+            return self._collection.find().sort("index", 1).limit(1)[0]
+        else:
+            return None
 
     def _get_last(self):
-        condition = {"$query": {}, "$orderby": {"index": -1}}
-        return self._collection.find_one(condition)
+        if self.amount() > 0:
+            return self._collection.find().sort("index", -1).limit(1)[0]
+        else:
+            return None
 
 
 class FilePool(PoolInterface):
@@ -650,11 +689,12 @@ class FilePool(PoolInterface):
     """
 
     def __init__(self, directory, pool_size=0):
-        if isinstance(pool_size, int):
-            if pool_size < 0:
-                raise TypeError("Pool size should be positive integer")
-            self._size = pool_size
+        if not isinstance(pool_size, int):
+            raise TypeError("Pool size should be positive integer")
+        if pool_size < 0:
+            raise TypeError("Pool size should be positive integer")
 
+        self._size = pool_size
         self._dir = directory
         self._make_dirs(self._dir)
         self._indexes = dict()
@@ -690,23 +730,19 @@ class FilePool(PoolInterface):
                 )
 
         """
-        if numpy.isnan(priority):
-            priority = 1e-3
-        elif priority < 1e-3:
-            priority = 1e-3
-        elif priority > 1e+3:
-            priority = 1e+3
-
-        if self.amount() > self.size() > 0:
-            path = random.sample(self._indexes.keys(), 1)[0]
+        priority = filter_priority(priority)
+        if self.amount() + 1 >= self._size > 0:
+            path = self._get_first()
             self.remove(path)
+        path = self._get_last()
 
-        path = self._save_data(
-            state, action, reward, next_state, done, next_actions
+        order = str(int(os.path.basename(path).split('.npz')[0]) + 1)
+        path = save_data(
+            os.path.join(self._dir, order),
+            state, action, reward, next_state, done, next_actions,
+            priority, info
         )
         self._indexes[path] = priority
-
-        return self.amount()
 
     def remove(self, path):
         """
@@ -748,27 +784,16 @@ class FilePool(PoolInterface):
         """
         dist = []
         paths = []
-        for path, p in self._indexes.items():
+        for path, p in six.iteritems(self._indexes):
             dist.append(p)
             paths.append(path)
 
-        sum_d = float(sum(dist))
-        prob = [item / sum_d for item in dist]
+        samples = bias_sample(dist, size)
 
-        if size > 0:
-            if size > self.amount():
-                size = self.amount()
-            paths = numpy.random.choice(
-                paths, size=size, p=prob, replace=False
-            )
-        else:
-            paths = []
-
-        for path in paths:
-            record = self._load_data(path)
-            if record:
-                record["priority"] = self._indexes[path]
-                yield path, record
+        for path in [paths[i] for i in samples]:
+            record = load_data(path)
+            record["priority"] = self._indexes[path]
+            yield path, record
 
     def update(self, priorities):
         """
@@ -795,17 +820,8 @@ class FilePool(PoolInterface):
         """
         for path, priority in priorities:
             if path in self._indexes:
-                if numpy.isnan(priority):
-                    p = 1e-3
-                elif priority < 1e-3:
-                    p = 1e-3
-                elif priority > 1e+3:
-                    p = 1e+3
-                else:
-                    p = priority
-
                 if path in self._indexes:
-                    self._indexes[path] = p
+                    self._indexes[path] = filter_priority(priority)
 
     def size(self):
         """
@@ -867,8 +883,8 @@ class FilePool(PoolInterface):
             ...
 
         """
-        for path, priority in self._indexes.items():
-            record = self._load_data(path)
+        for path, priority in six.iteritems(self._indexes):
+            record = load_data(path)
             if record:
                 record['priority'] = priority
                 yield path, record
@@ -909,60 +925,7 @@ class FilePool(PoolInterface):
         if not os.path.exists(path):
             os.makedirs(path)
 
-    def _save_data(self, state, action, reward, next_state, done,
-                   next_actions=None):
-        """
-        Save numpy array to disk
 
-        Args:
-            state: any type as long as it can describe the state of environment
-            action: any type as long as it can represent executed action with
-                above state
-            reward: also free type for action feedback
-            next_state: Like state but it is for describing next state
-            next_actions: For next state's actions (Default: None),
-
-        Returns:
-            path (str): file path
-
-        Examples:
-            >>> fpool._save_data(state, action, ...)
-            "/xxx/yyy/zzz/f88fc90a-bc3d-413f-8864-44b21beb7bc5.npz"
-
-        """
-        name = os.path.join(self._dir, str(uuid.uuid4()))
-        numpy.savez(
-            name, state=state, action=action, reward=reward,
-            next_state=next_state, done=done, next_actions=next_actions,
-        )
-        return "{}.npz".format(name)
-
-    def _load_data(self, path):
-        """
-        Load data from disk to memory
-
-        Args:
-            path (str): file path
-
-
-        Returns:
-            record (dict): If IOError then return None
-
-        Examples:
-
-        """
-        try:
-            npzfile = numpy.load(path)
-            return {
-                "state": npzfile["state"],
-                "action": npzfile["action"],
-                "reward": npzfile["reward"],
-                "next_state": npzfile["next_state"],
-                "done": npzfile["done"],
-                "next_actions": npzfile["next_actions"]
-            }
-        except IOError:
-            return None
 
     def _remove_data(self, path):
         """
@@ -981,3 +944,20 @@ class FilePool(PoolInterface):
             os.remove(path)
         except IOError:
             pass
+
+    def _get_first(self):
+        self.sync()
+        if self.amount() > 0:
+            paths = list(six.iterkeys(self._indexes))
+            paths = sorted(paths, key=lambda x: int(os.path.basename(x).split(".npz")[0]))
+            return paths[0]
+        else:
+            return None
+
+    def _get_last(self):
+        if self.amount() > 0:
+            paths = list(six.iterkeys(self._indexes))
+            paths = sorted(paths, key=lambda x: int(os.path.basename(x).split(".npz")[0]))
+            return paths[-1]
+        else:
+            return None
