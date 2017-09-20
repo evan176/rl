@@ -1,55 +1,185 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
-from copy import copy
-from types import GeneratorType
-from unittest import TestCase
+from __future__ import absolute_import
+from __future__ import division
+from __future__ import print_function
+
+try:
+    range = xrange
+except:
+    pass
 
 try:
     from unittest import mock
 except:
     import mock
+
 import numpy
+import six
 import tensorflow as tf
 
-from rl.mlp import weight_variable, bias_variable, multilayer_perceptron
+from rl.mlp import (
+    weight_variable, bias_variable, LeakyReLU, multilayer_perceptron
+)
 
 
-class MLPTest(TestCase):
-    
-    def setUp(self):
-        pass
-
-    def tearDown(self):
-        pass
+class WeightTest(tf.test.TestCase):
 
     @mock.patch("tensorflow.truncated_normal")
-    def test_weight(self, mock_truncated_normal):
-        mock_truncated_normal.side_effect = lambda x, **kargs: numpy.ones(x)
+    def setUp(self, mock_truncated_normal):
+        def side_effect(shape, stddev):
+            return numpy.ones(shape)
+        mock_truncated_normal.side_effect = side_effect
 
-        w = weight_variable([3, 3])
-        self.assertIsInstance(w, tf.Variable)
-        self.assertEqual(w.get_shape(), [3, 3])
+        self._test_shape = [3, 3]
+        self._test_name = "test_w"
+
+        tf.reset_default_graph()
+        with self.test_session() as sess:
+            self._w = weight_variable(self._test_shape, self._test_name)
+            self._sess = sess
+
+    def test_name(self):
+        self.assertEqual(self._w.name, "{}:0".format(self._test_name))
+
+    def test_type(self):
+        self.assertIsInstance(self._w, tf.Variable)
+
+    def test_shape(self):
+        self.assertAllEqual(self._w.get_shape(), self._test_shape)
+
+    def test_value(self):
+        self._sess.run(tf.global_variables_initializer())
+        self.assertAllEqual(self._sess.run(self._w), numpy.ones(self._test_shape))
+
+
+class BiasTest(tf.test.TestCase):
 
     @mock.patch("tensorflow.constant")
-    def test_bias(self, mock_constant):
-        mock_constant.side_effect = lambda x, **kargs: numpy.ones(kargs['shape'])
+    def setUp(self, mock_constant):
+        def side_effect(_, shape):
+            return numpy.ones(shape)
+        mock_constant.side_effect = side_effect
 
-        b = bias_variable([3, 3])
-        self.assertIsInstance(b, tf.Variable)
-        self.assertEqual(b.get_shape(), [3, 3])
+        self._test_shape = [3, 3]
+        self._test_name = "test_b"
 
-    def test_mlp(self):
-        test_dimensions = [5, 5, 5, 2]
-        net, input_x, variables = multilayer_perceptron(test_dimensions)
+        tf.reset_default_graph()
+        with self.test_session() as sess:
+            self._sess = sess
+            self._b = bias_variable(self._test_shape, self._test_name)
 
-        self.assertIsInstance(net, tf.Tensor)
-        self.assertEqual([x.value for x in net.get_shape().dims], [None, test_dimensions[-1]])
+    def test_name(self):
+        self.assertEqual(self._b.name, "{}:0".format(self._test_name))
 
-        self.assertIsInstance(input_x, tf.Tensor)
-        self.assertEqual([x.value for x in input_x.get_shape().dims], [None, test_dimensions[0]])
+    def test_type(self):
+        self.assertIsInstance(self._b, tf.Variable)
 
-        for i in range(len(test_dimensions) - 1):
-            w = variables['w_{}'.format(i)]
-            b = variables['b_{}'.format(i)]
-            self.assertEqual(w.get_shape(), [test_dimensions[i], test_dimensions[i + 1]])
-            self.assertEqual(b.get_shape(), [test_dimensions[i + 1]])
+    def test_shape(self):
+        self.assertAllEqual(self._b.get_shape(), self._test_shape)
+
+    def test_value(self):
+        self._sess.run(tf.global_variables_initializer())
+        self.assertAllEqual(self._sess.run(self._b), numpy.ones(self._test_shape))
+
+
+class LeakyReLUTest(tf.test.TestCase):
+
+    def test_name(self):
+        tf.reset_default_graph()
+        with self.test_session() as sess:
+            self._sess = sess
+            x = tf.placeholder(tf.float32, [1.0])
+            a = LeakyReLU(x, 1, "test_relu")
+            self.assertEqual(a.name, "test_relu:0")
+
+    def test_type(self):
+        tf.reset_default_graph()
+        with self.test_session():
+            x = tf.placeholder(tf.float32, [1.0])
+            a = LeakyReLU(x, 1, "test_relu")
+            self.assertIsInstance(a, tf.Tensor)
+
+    def test_alpha_001(self):
+        tf.reset_default_graph()
+        with self.test_session() as sess:
+            x = tf.placeholder(tf.float32, [1.0])
+            a = LeakyReLU(x, 0.001, "test_relu")
+            sess.run(tf.global_variables_initializer())
+            self.assertEqual(sess.run(a, feed_dict={x: [10]}), 10)
+            self.assertEqual(sess.run(a, feed_dict={x: [-1]}), -0.001)
+
+
+class MLPTest(tf.test.TestCase):
+
+    def setUp(self):
+        self._test_dims = [5, 5, 5, 2]
+        self._test_scope = "test"
+
+        tf.reset_default_graph()
+        with self.test_session() as sess:
+            self._sess = sess
+            with tf.name_scope(self._test_scope):
+                self._net, self._input_x, self._vars = multilayer_perceptron(self._test_dims)
+
+    def test_input_name(self):
+        self.assertEqual(self._input_x.name, "{}/x:0".format(self._test_scope))
+
+    def test_input_type(self):
+        self.assertIsInstance(self._input_x, tf.Tensor)
+
+    def test_input_shape(self):
+        self.assertAllEqual(
+            [x.value for x in self._input_x.get_shape().dims],
+            [None, self._test_dims[0]]
+        )
+
+    def test_vars_name(self):
+        for i in range(len(self._test_dims) - 1):
+            w_name, b_name = 'w_{}'.format(i), 'b_{}'.format(i)
+            w, b = self._vars[w_name], self._vars[b_name]
+
+            self.assertEqual(
+                w.name, "{}/{}:0".format(self._test_scope, w_name)
+            )
+            self.assertEqual(
+                b.name, "{}/{}:0".format(self._test_scope, b_name)
+            )
+
+    def test_vars_type(self):
+        for i in range(len(self._test_dims) - 1):
+            w_name, b_name = 'w_{}'.format(i), 'b_{}'.format(i)
+            w, b = self._vars[w_name], self._vars[b_name]
+
+            self.assertIsInstance(w, tf.Variable)
+            self.assertIsInstance(b, tf.Variable)
+
+    def test_vars_shape(self):
+        for i in range(len(self._test_dims) - 1):
+            w_name, b_name = 'w_{}'.format(i), 'b_{}'.format(i)
+            w, b = self._vars[w_name], self._vars[b_name]
+
+            self.assertAllEqual(
+                [x.value for x in w.get_shape().dims],
+                [self._test_dims[i], self._test_dims[i + 1]]
+            )
+            self.assertAllEqual(
+                [x.value for x in b.get_shape().dims],
+                [self._test_dims[i + 1]]
+            )
+
+    def test_net_name(self):
+        dim_len = len(self._test_dims)
+        act_name = "{}/y_{}/activate_y_{}:0".format(
+            self._test_scope, dim_len - 2, dim_len - 2
+        )
+        self.assertEqual(self._net.name, act_name)
+
+    def test_net_type(self):
+        self.assertIsInstance(self._net, tf.Tensor)
+
+    def test_net_shape(self):
+        self.assertEqual(
+            [x.value for x in self._net.get_shape().dims],
+            [None, self._test_dims[-1]]
+        )
