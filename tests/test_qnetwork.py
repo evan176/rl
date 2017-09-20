@@ -1,14 +1,25 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
+from __future__ import absolute_import
+from __future__ import division
+from __future__ import print_function
+
 from copy import copy
 import random
 from types import GeneratorType
 
 try:
+    range = xrange
+except:
+    pass
+
+try:
     from unittest import mock
 except:
     import mock
+
 import numpy
+import six
 import tensorflow as tf
 
 from rl.qnetwork import DQN
