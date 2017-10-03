@@ -733,12 +733,17 @@ class FilePool(PoolInterface):
         priority = filter_priority(priority)
         if self.amount() + 1 >= self._size > 0:
             path = self._get_first()
-            self.remove(path)
-        path = self._get_last()
+            if path:
+                self.remove(path)
 
-        order = str(int(os.path.basename(path).split('.npz')[0]) + 1)
+        path = self._get_last()
+        if path:
+            file_name = str(int(os.path.basename(path).split('.npz')[0]) + 1)
+        else:
+            file_name = "0.npz"
+
         path = save_data(
-            os.path.join(self._dir, order),
+            os.path.join(self._dir, file_name),
             state, action, reward, next_state, done, next_actions,
             priority, info
         )
