@@ -229,6 +229,8 @@ class MemoryPool(PoolInterface):
         self._experiences = {}
         self._q_front = 0
 
+        self._tree = numpy.zeros([2 * pool_size - 1])
+
     def add(self, state, action, reward, next_state, done,
             next_actions=None, priority=1, info=None):
         """
@@ -263,6 +265,8 @@ class MemoryPool(PoolInterface):
             self._q_front = 0
         else:
             self._q_front += 1
+
+        self._update_tree(self._q_front + self._size - 1, priority)
         # Add new data
         self._experiences[self._q_front] = {
             'state': state,
@@ -274,6 +278,34 @@ class MemoryPool(PoolInterface):
             'priority': priority,
             'info': info,
         }
+
+    def _propagate(self, idx, change):
+        parent = (idx - 1) // 2
+        self._tree[parent] += change
+
+        while parent != 0:
+            parent = (parent - 1) // 2
+            self._tree[parent] += change
+
+    def _retrieve(self, idx, s):
+        left = 2 * idx + 1
+        right = left + 1
+
+        while left < len(self._tree):
+            if s <= self._tree[left]:
+                idx = left
+            else:
+                s = s - self._tree[left]
+                idx = right
+            left = 2 * idx + 1
+            right = left + 1
+        return idx
+
+    def _update_tree(self, idx, p):
+        change = p - self._tree[idx]
+
+        self._tree[idx] = p
+        self._propagate(idx, change)
 
     def remove(self, key):
         """
@@ -304,7 +336,7 @@ class MemoryPool(PoolInterface):
                 [
                 (index, {'state': ..., 'action': ..., 'reward': ...,
                  'next_state': ..., 'next_actions': ..., 'priority': ...,}),
-                (...),
+                (...)
                 ]
 
         Examples:
@@ -312,16 +344,17 @@ class MemoryPool(PoolInterface):
             >>> pool.sample(100)
 
         """
-        dist = []
-        keys = []
-        for k, record in six.iteritems(self._experiences):
-            dist.append(record['priority'])
-            keys.append(k)
-
-        samples = bias_sample(dist, size)
-
-        for i in samples:
-            yield keys[i], self._experiences[keys[i]]
+        """
+        idx_memory = []
+        while len(idx_memory) < size:
+            new_idx = self._retrieve(0, random.uniform(1e-3, self._tree[0])) - self._size + 1
+            if sum([abs(new_idx - idx) > size for idx in idx_memory]) == len(idx_memory):
+                idx_memory.append(new_idx)
+                yield new_idx, self._experiences[new_idx]
+        """
+        for i in range(size):
+            new_idx = self._retrieve(0, random.uniform(1e-3, self._tree[0])) - self._size + 1
+            yield new_idx, self._experiences[new_idx]
 
     def update(self, priorities):
         """
@@ -348,9 +381,9 @@ class MemoryPool(PoolInterface):
         """
         for key, priority in priorities:
             try:
-                self._experiences[key]['priority'] = filter_priority(priority)
-            except (KeyError, TypeError):
-                pass
+                self._update_tree(key + self._size - 1, filter_priority(priority))
+            except (KeyError, TypeError) as e:
+                print(e)
 
     def size(self):
         """
