@@ -43,26 +43,6 @@ def bias_variable(shape, name=None):
     return tf.Variable(tf.constant(0.1, shape=shape), name=name)
 
 
-def normalize_weight(w, dim, name=None, epsilon=1e-12):
-    """
-    Create weight normalization op
-    Args:
-        w (tf.Variable): weight variable
-        b (tf.Variable): bias variable
-        dim (int): dimension for reduce_sum
-    Returns:
-        norm_w (tf.Tensor): normalized weight
-        norm_b (tf.Tensor): normalized bias
-    Usage:
-        >>> norm_w = normalize_weight(w, 0)
-    """
-    with tf.name_scope(name) as scope:
-        square_sum = tf.reduce_sum(tf.square(w), dim, keep_dims=True)
-        inv_norm = tf.rsqrt(tf.maximum(square_sum, epsilon))
-        norm_w = tf.multiply(w, inv_norm)
-    return norm_w
-
-
 def LeakyReLU(x, alpha, name=None):
     return tf.maximum(alpha * x, x, name=name)
 
