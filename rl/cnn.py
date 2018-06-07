@@ -13,14 +13,12 @@ import numpy
 import six
 import tensorflow as tf
 
-from rl.mlp import (
-    weight_variable, bias_variable, normalize_weight, LeakyReLU
-)
+from rl.mlp import weight_variable, bias_variable
 from rl.utils import summarize_variable
 
 
 def conv_net(channels, filters, poolings, width, height, depth=None,
-             fc_dim=1024, alpha=1e-3):
+             fc_dim=1024, alpha=0.2):
     """
     Create convolution network 
     Args:
@@ -69,7 +67,6 @@ def conv_net(channels, filters, poolings, width, height, depth=None,
         b_name = "conv_b_{}".format(i)
         y_name = "conv_y_{}".format(i)
         act_y_name = "activate_{}".format(y_name)
-        norm_name = "norm_conv_{}".format(i)
         pool_name = "max_pool_{}".format(i)
 
         if depth:
@@ -83,17 +80,12 @@ def conv_net(channels, filters, poolings, width, height, depth=None,
             summarize_variable(w, w_name)
             summarize_variable(b, b_name)
 
-            # norm_w = normalize_weight(
-            #     w, [0, 1, 2, 3], name=norm_name
-            # )
-
             with tf.name_scope(y_name) as scope:
                 y = tf.add(
-                    # tf.nn.conv3d(x, norm_w, strides=[1, 1, 1, 1, 1], padding='SAME'),
                     tf.nn.conv3d(x, w, strides=[1, 1, 1, 1, 1], padding='SAME'),
                     b, name=y_name
                 )
-                h_conv = LeakyReLU(y, alpha, name=act_y_name)
+                h_conv = tf.nn.leaky_relu(y, alpha, name=act_y_name)
 
             pooling_shape = [
                 1, poolings[i][0], poolings[i][1], poolings[i][2], 1
@@ -113,17 +105,12 @@ def conv_net(channels, filters, poolings, width, height, depth=None,
             summarize_variable(w, w_name)
             summarize_variable(b, b_name)
 
-            # norm_w = normalize_weight(
-            #     w, [0, 1, 2], name=norm_name
-            # )
-
             with tf.name_scope(y_name) as scope:
                 y = tf.add(
-                    # tf.nn.conv2d(x, norm_w, strides=[1, 1, 1, 1], padding='SAME'),
                     tf.nn.conv2d(x, w, strides=[1, 1, 1, 1], padding='SAME'),
                     b, name=y_name
                 )
-                h_conv = LeakyReLU(y, alpha, name=act_y_name)
+                h_conv = tf.nn.leaky_relu(y, alpha, name=act_y_name)
 
             pooling_shape = [1, poolings[i][0], poolings[i][1], 1]
             h_pool = tf.nn.max_pool(
@@ -150,13 +137,8 @@ def conv_net(channels, filters, poolings, width, height, depth=None,
     summarize_variable(variables[w_name], w_name)
     summarize_variable(variables[b_name], b_name)
 
-    # norm_w = normalize_weight(
-    #     variables[w_name], 0, name="norm_fc"
-    # )
-
     with tf.name_scope(y_name) as scope:
-        # y = tf.add(tf.matmul(h_flat, norm_w), variables[b_name], name=y_name)
         y = tf.add(tf.matmul(h_flat, variables[w_name]), variables[b_name], name=y_name)
-        h_fc = LeakyReLU(y, alpha, name=act_y_name)
+        h_fc = tf.nn.leaky_relu(y, alpha, name=act_y_name)
 
     return h_fc, input_x, variables
