@@ -19,7 +19,7 @@ import six
 import tensorflow as tf
 
 from rl.mlp import (
-    weight_variable, bias_variable, LeakyReLU, multilayer_perceptron
+    weight_variable, bias_variable, multilayer_perceptron
 )
 
 
@@ -81,33 +81,6 @@ class BiasTest(tf.test.TestCase):
     def test_value(self):
         self._sess.run(tf.global_variables_initializer())
         self.assertAllEqual(self._sess.run(self._b), numpy.ones(self._test_shape))
-
-
-class LeakyReLUTest(tf.test.TestCase):
-
-    def test_name(self):
-        tf.reset_default_graph()
-        with self.test_session() as sess:
-            self._sess = sess
-            x = tf.placeholder(tf.float32, [1.0])
-            a = LeakyReLU(x, 1, "test_relu")
-            self.assertEqual(a.name, "test_relu:0")
-
-    def test_type(self):
-        tf.reset_default_graph()
-        with self.test_session():
-            x = tf.placeholder(tf.float32, [1.0])
-            a = LeakyReLU(x, 1, "test_relu")
-            self.assertIsInstance(a, tf.Tensor)
-
-    def test_alpha_001(self):
-        tf.reset_default_graph()
-        with self.test_session() as sess:
-            x = tf.placeholder(tf.float32, [1.0])
-            a = LeakyReLU(x, 0.001, "test_relu")
-            sess.run(tf.global_variables_initializer())
-            self.assertEqual(sess.run(a, feed_dict={x: [10]}), 10)
-            self.assertEqual(sess.run(a, feed_dict={x: [-1]}), -0.001)
 
 
 class MLPTest(tf.test.TestCase):
