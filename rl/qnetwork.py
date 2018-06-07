@@ -170,7 +170,10 @@ class DQN(RLInterface):
             learning_rate = self._learning_rate
 
         # Create available vector
-        chosen_vector = self._create_action_vector(len(x), chosen_action)
+        chosen_vector = self._create_action_vector(
+            len(chosen_action), chosen_action
+        )
+
         # Compute target value
         if self._train_step < self._replace_iter:
             target_value = reward
@@ -182,8 +185,8 @@ class DQN(RLInterface):
         if self._train_step % 100 == 0 and self._train_writer:
             run_options = tf.RunOptions(trace_level=tf.RunOptions.FULL_TRACE)
             run_metadata = tf.RunMetadata()
-            summary, _ = self._session.run(
-                [self._merged, self._train_op],
+            summary, td_error, _ = self._session.run(
+                [self._merged, self._td_error, self._train_op],
                 feed_dict={
                     self._eval_input: x, self._chosen_holder: chosen_vector,
                     self._target_holder: target_value,
@@ -194,7 +197,7 @@ class DQN(RLInterface):
             self._train_writer.add_run_metadata(run_metadata, "step {}".format(self._train_step))
             self._train_writer.add_summary(summary, self._train_step)
         else:
-            self._session.run(self._train_op, feed_dict={
+            td_error, _ = self._session.run([self._td_error, self._train_op], feed_dict={
                 self._eval_input: x, self._chosen_holder: chosen_vector,
                 self._target_holder: target_value,
                 self._lr_input: learning_rate
@@ -206,14 +209,14 @@ class DQN(RLInterface):
             for r_op in self._replace_ops:
                 self._session.run(r_op)
 
-        return self.get_loss(
-            x, chosen_action, reward, next_x, done, next_available
-        )
+        return td_error
 
     def get_loss(self, x, chosen_action, reward, next_x,
                  done, next_available=None):
         # Create available vector
-        chosen_vector = self._create_action_vector(len(x), chosen_action)
+        chosen_vector = self._create_action_vector(
+            len(chosen_action), chosen_action
+        )
         # Compute target value
         target_value = self._calculate_target_value(
             reward, next_x, done, next_available
@@ -340,13 +343,15 @@ class DoubleDQN(DQN):
     def _calculate_target_value(self, reward, next_x, done,
                                 next_available=None):
         # Use evaluation to select next state's action
-        next_q = self._session.run(
-            self._eval_q, feed_dict={self._eval_input: next_x}
-        )
-        target_q = self._session.run(
-            self._target_q, feed_dict={self._target_input: next_x}
+        next_q, target_q = self._session.run(
+            [self._eval_q, self._target_q],
+            feed_dict={
+                self._eval_input: next_x,
+                self._target_input: next_x
+            }
         )
         # Compute target value from next state
+
         target_value = []
         for i in range(len(reward)):
             max_target = -1e9
