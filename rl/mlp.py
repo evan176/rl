@@ -26,7 +26,7 @@ def weight_variable(shape, name=None):
     Usage:
         >>> weight_variable([100, 100])
     """
-    return tf.Variable(tf.truncated_normal(shape, stddev=0.001), name=name)
+    return tf.Variable(tf.truncated_normal(shape, stddev=0.1), name=name)
 
 
 def bias_variable(shape, name=None):
